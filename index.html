@@ -67,6 +67,9 @@ nav button.on{border-top-color:var(--au);color:var(--g);font-weight:800;backgrou
 #qr svg{width:100%;height:auto}
 .rb{background:transparent;color:var(--au2);border:1px solid rgba(200,163,93,.4);padding:3px 11px;border-radius:20px;font-weight:600;font-size:12px}
 a.sm svg{width:15px;height:15px;vertical-align:-3px;margin-inline-start:4px}
+.pw{position:relative}.pw input{padding-left:50px}
+.pw .eye{position:absolute;left:6px;top:50%;transform:translateY(-50%);width:38px;height:38px;border:0;background:none;color:var(--mu);display:flex;align-items:center;justify-content:center;padding:0;margin:0}
+.pw .eye svg{width:22px;height:22px}
 button:focus-visible,a:focus-visible{outline:3px solid rgba(200,163,93,.65);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -116,16 +119,16 @@ const l=g.l.slice().sort((a,b)=>a.price-b.price);
 return `<button class="sm" onclick="sel=null;render()">رجوع ›</button><h2 style="margin-top:12px">${e(g.name)}${g.kind?' – '+e(g.kind):''}</h2><p class="mu">${e(g.type||'')} · ${e(g.pack||'')}</p><div class="st"><div class="card"><span class="mu">الأدنى</span><b style="font-size:18px">${fp(l[0].price)}</b></div><div class="card"><span class="mu">الأعلى</span><b style="font-size:18px">${fp(l[l.length-1].price)}</b></div></div><div class="card"><h2 style="font-size:17px">تطور السعر</h2>${seg()}${chart(g.l)}</div><h2 style="font-size:17px;margin:16px 0 8px">الأسعار في المحلات</h2>`+l.map(i=>{const s=D.u.find(x=>x.id==i.uid);return `<div class="card"><div class="row"><b style="text-decoration:underline" onclick="SH='${s.id}';render()">${e(s.shop)}</b><span class="pr">${fp(i.price)} ${arr(i)}</span></div><p class="mu">${e(s.hood||'')} · آخر تحديث ${fd(i.t)}${expT(i)}</p>${s.lat?`<a class="sm" target="_blank" rel="noopener" href="${map(s)}">الاتجاهات إلى المحل</a>`:''}</div>`}).join('')}
 return `<button class="sm" onclick="go('home')">رجوع ›</button><div class="card"><h2>دليل الأسعار</h2><p class="mu">ابحث بالاسم أو اكتب رقم الباركود</p><input id="sq" placeholder="اسم المادة أو الباركود…" value="${e(q)}" oninput="q=this.value.trim();$('#ls').innerHTML=lst()"><button class="btn s" type="button" onclick="scan('sq')">مسح الباركود بالكاميرا</button></div><div class="chips">${['',...TY].map(t=>`<button class="${ty==t?'on':''}" onclick="ty='${t}';render()">${t||'الكل'}</button>`).join('')}</div><div id="ls">${lst()}</div><button class="btn" onclick="go('cm')">تقديم شكوى صحية<div style="font-size:13px;font-weight:400">بلاغ فوري مع رقم متابعة</div></button>`}
 function vLogin(){return `<div class="card"><h2>تسجيل دخول التجار والرقابة</h2><p class="mu">الدخول مسموح للحسابات التي وافقت عليها الرقابة التموينية فقط.</p><label>رقم الهاتف المحمول</label><input id="ph" class="ltr" inputmode="tel" placeholder="09XXXXXXXX"><label>كلمة المرور</label><input id="pw" type="password"><div class="er" id="er"></div><button class="btn" onclick="doLogin()">تسجيل الدخول</button></div>`}
-async function doLogin(){const p=$('#ph').value.trim(),w=$('#pw').value;if(!p||!w)return err('اكتب رقم الهاتف وكلمة المرور');LG=true;
+async function doLogin(){const p=nd($('#ph').value),w=$('#pw').value;if(!p||!w)return err('اكتب رقم الهاتف وكلمة المرور');LG=true;
 try{const c=await FB.signInWithEmailAndPassword(FB.auth,em(p),w);const r=await adopt(c.user);
 if(r=='ok'){const ro=ADMU?'admin':OWN.role;if(ro==rs){LG=false;go(ADMU?'req':'my');return}await FB.signOut(FB.auth);resetU();LG=false;return err('هذا الرقم مسجّل في واجهة أخرى. ارجع للصفحة الرئيسية واختر واجهتك الصحيحة.')}
 await FB.signOut(FB.auth);LG=false;S=null;
 err(r=='pending'?'حسابك قيد المراجعة، لا يمكن الدخول قبل موافقة الرقابة التموينية.':r=='rejected'?'تم رفض طلب التسجيل. راجع مديرية التجارة الداخلية.':'هذا الحساب غير مسجّل في المنظومة')}
-catch(x){LG=false;S=null;const c=x.code||'';err(/network/.test(c)?'تعذّر الاتصال، تحقق من الإنترنت':/api-key/.test(c)?'مفتاح الاتصال بالخادم غير صحيح ('+c+')':/permission/.test(c)?'لا توجد صلاحية للقراءة ('+c+')':/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'رقم الهاتف أو كلمة المرور غير صحيحة':'تعذّر الدخول ('+(c||x.message)+')')}}
+catch(x){LG=false;S=null;const c=x.code||'';err(/network|unavailable|offline/.test(c)?'تعذّر الاتصال بالخادم، أعد المحاولة بعد لحظات':/api-key/.test(c)?'مفتاح الاتصال بالخادم غير صحيح ('+c+')':/permission/.test(c)?'لا توجد صلاحية للقراءة ('+c+' - '+stp+')':/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'رقم الهاتف أو كلمة المرور غير صحيحة':'تعذّر الدخول ('+(c||x.message)+')')}}
 function vReg(){L=null;return `<div class="card"><h2>تسجيل منشأة جديدة</h2><p class="mu">يُفعَّل الحساب بعد موافقة الرقابة التموينية.</p><label>نوع الحساب</label><select id="rl"><option value="retail">تاجر تجزئة</option><option value="wholesale">تاجر جملة</option></select><label>اسم صاحب المنشأة / المسؤول</label><input id="ow"><label>نشاط المنشأة</label><input id="ac" placeholder="مثال: مواد غذائية، منظفات"><label>اسم المنشأة</label><input id="sh"><label>الحي / العنوان</label><input id="hd"><label>رقم الهاتف المحمول</label><input id="ph" class="ltr" inputmode="tel" placeholder="09XXXXXXXX"><label>كلمة المرور (6 أحرف على الأقل)</label><input id="pw" type="password"><label>رقم السجل التجاري (اختياري)</label><input id="rg" class="ltr" inputmode="numeric"><label>موقع المنشأة على الخريطة</label><button class="btn s" onclick="loc()">تحديد موقعي الحالي</button><p class="mu" id="lx">لم يُحدَّد الموقع بعد. افتح هذه الصفحة وأنت داخل المحل.</p><div class="er" id="er"></div><button class="btn" onclick="doReg()">إرسال طلب التسجيل</button></div>`}
 function loc(){$('#lx').textContent='جارٍ تحديد الموقع…';if(!navigator.geolocation)return $('#lx').textContent='المتصفح لا يدعم تحديد الموقع.';
 navigator.geolocation.getCurrentPosition(p=>{L={lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6)};$('#lx').textContent='✓ تم تحديد الموقع ('+L.lat+' ، '+L.lng+')'},()=>{$('#lx').textContent='تعذّر تحديد الموقع. اسمح للمتصفح بالوصول إلى الموقع ثم أعد المحاولة.'},{enableHighAccuracy:true,timeout:15000})}
-async function doReg(){const sh=$('#sh').value.trim(),ph=$('#ph').value.trim(),pw=$('#pw').value;
+async function doReg(){const sh=$('#sh').value.trim(),ph=nd($('#ph').value),pw=$('#pw').value;
 if(!sh)return err('اكتب اسم المنشأة');if(!$('#ow').value.trim())return err('اكتب اسم صاحب المنشأة');
 if(!/^09\d{8}$/.test(ph))return err('رقم الهاتف يجب أن يكون بصيغة 09XXXXXXXX');
 if(pw.length<6)return err('كلمة المرور قصيرة');
@@ -216,12 +219,19 @@ const un={};function sub(k,r,f){if(un[k])un[k]();un[k]=FB.onSnapshot(r,f,()=>{})
 function subShops(adm){const c=FB.collection(FB.db,'shops');sub('sh',adm?c:FB.query(c,FB.where('status','==','approved')),x=>{SHP=x.docs.map(d=>Object.assign({id:d.id},d.data()));rebuildU();rr()})}
 function subItems(){sub('it',FB.collection(FB.db,'items'),x=>{D.i=x.docs.map(d=>{const v=d.data();v.id=d.id;v.h=(v.h||[]).map(y=>[y.t,y.p]);return v});rr()})}
 function subAdmin(){subShops(true);sub('pv',FB.collection(FB.db,'private'),x=>{PRV={};x.docs.forEach(d=>PRV[d.id]=d.data());rebuildU();rr()});sub('cp',FB.collection(FB.db,'complaints'),x=>{D.c=x.docs.map(d=>d.data()).sort((a,b)=>a.at-b.at);rr()})}
-async function adopt(user){ADMU=null;OWN=null;
-const a=await FB.getDoc(FB.doc(FB.db,'admins',user.uid));
-if(a.exists()){ADMU={id:user.uid,role:'admin',shop:'دائرة الرقابة التموينية',status:'approved'};subAdmin();rebuildU();S=user.uid;return 'ok'}
-const g=await FB.getDoc(FB.doc(FB.db,'shops',user.uid));if(!g.exists())return 'none';
+let stp='';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function gd(ref){for(let i=0;;i++){try{return await FB.getDoc(ref)}catch(e){const t=(e.code||'')+' '+(e.message||'');if(i>=3||!/unavailable|deadline|offline|aborted|internal/.test(t))throw e;await sleep(700*(i+1))}}}
+const nd=t=>t.replace(/[\u0660-\u0669]/g,d=>d.charCodeAt(0)-1632).replace(/[\u06F0-\u06F9]/g,d=>d.charCodeAt(0)-1776).replace(/\s+/g,'');
+const EY='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',EO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.2"/><path d="M6.6 6.6A16.6 16.6 0 0 0 2 12s3.6 7 10 7a10 10 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+function eyes(){document.querySelectorAll('input[type=password]').forEach(i=>{if(i.parentNode.classList.contains('pw'))return;const w=document.createElement('div');w.className='pw';i.parentNode.insertBefore(w,i);w.appendChild(i);const b=document.createElement('button');b.type='button';b.className='eye';b.setAttribute('aria-label','إظهار كلمة المرور');b.innerHTML=EY;b.onclick=()=>{const h=i.type=='password';i.type=h?'text':'password';b.innerHTML=h?EO:EY};w.appendChild(b)})}
+{const _r=render;render=function(){_r.apply(this,arguments);eyes()}}
+async function adopt(user){ADMU=null;OWN=null;stp='admins';let a=null;
+try{a=await gd(FB.doc(FB.db,'admins',user.uid))}catch(e){if(/permission/.test(e.code||''))a=null;else throw e}
+if(a&&a.exists()){ADMU={id:user.uid,role:'admin',shop:'دائرة الرقابة التموينية',status:'approved'};subAdmin();rebuildU();S=user.uid;return 'ok'}
+stp='shops';const g=await gd(FB.doc(FB.db,'shops',user.uid));if(!g.exists())return 'none';
 const o=Object.assign({id:user.uid},g.data());if(o.status!='approved')return o.status;
-const p=await FB.getDoc(FB.doc(FB.db,'private',user.uid));PRV[user.uid]=p.exists()?p.data():{};OWN=o;rebuildU();S=user.uid;return 'ok'}
+stp='private';let pd={};try{const p=await gd(FB.doc(FB.db,'private',user.uid));pd=p.exists()?p.data():{}}catch(e){}PRV[user.uid]=pd;OWN=o;rebuildU();S=user.uid;return 'ok'}
 function resetU(){const w=!!ADMU;S=null;ADMU=null;OWN=null;PRV={};D.c=[];['pv','cp'].forEach(k=>{if(un[k]){un[k]();delete un[k]}});if(w)subShops(false);rebuildU()}
 function boot(){subItems();subShops(false);
 FB.onAuthStateChanged(FB.auth,async u=>{if(LG)return;
