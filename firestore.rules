@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signed() { return request.auth != null; }
+    function isAdmin() {
+      return signed() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function approved() {
+      return signed()
+        && exists(/databases/$(database)/documents/shops/$(request.auth.uid))
+        && get(/databases/$(database)/documents/shops/$(request.auth.uid)).data.status == 'approved';
+    }
+    function txt(v, n) { return v is string && v.size() > 0 && v.size() <= n; }
+    function opt(v, n) { return v is string && v.size() <= n; }
+
+    match /admins/{id} {
+      allow read: if signed() && request.auth.uid == id;
+      allow write: if false;
+    }
+
+    // المحلات: المواطن يقرأ محلات التجزئة المعتمدة فقط.
+    // التجار المعتمدون يقرؤون كل المحلات المعتمدة (تجزئة وجملة). الرقابة تقرأ كل شيء.
+    match /shops/{id} {
+      allow read: if (resource.data.status == 'approved' && resource.data.role == 'retail')
+                  || (signed() && request.auth.uid == id)
+                  || (resource.data.status == 'approved' && approved())
+                  || isAdmin();
+      allow create: if signed() && request.auth.uid == id
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.role in ['retail', 'wholesale']
+                    && txt(request.resource.data.shop, 100)
+                    && request.resource.data.keys().hasOnly(['role', 'shop', 'hood', 'lat', 'lng', 'status', 'created']);
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                    && request.resource.data.status in ['approved', 'rejected', 'suspended'];
+      allow delete: if false;
+    }
+
+    match /private/{id} {
+      allow read: if (signed() && request.auth.uid == id) || isAdmin();
+      allow create: if signed() && request.auth.uid == id
+                    && request.resource.data.keys().hasOnly(['phone', 'own', 'act', 'reg']);
+      allow update, delete: if false;
+    }
+
+    // دمج المواد المتشابهة: الرقابة وحدها تكتب. المفتاح = مفتاح مجموعة المادة (b:باركود أو n:رمز)،
+    // وto = مفتاح المجموعة الأساس. القراءة للجميع حتى تتجمّع الأسعار عند المواطن.
+    match /alias/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+                    && id.matches('[bn]:[A-Za-z0-9_-]{4,60}')
+                    && request.resource.data.keys().hasOnly(['to', 'by', 'at'])
+                    && request.resource.data.to is string
+                    && request.resource.data.to.matches('[bn]:[A-Za-z0-9_-]{4,60}')
+                    && request.resource.data.to != id
+                    && request.resource.data.by == request.auth.uid
+                    && request.resource.data.at is number;
+      allow delete: if isAdmin();
+    }
+
+    // المواد: كل تاجر يكتب مادته وسعره بالطريقة التي يريدها (لا حدود على السعر ولا قائمة إجبارية).
+    // القراءة: التجزئة للجميع، والجملة للتجار المعتمدين والرقابة فقط.
+    // سجل الأسعار h يُضاف إليه فقط ولا يُعدَّل ما سبق.
+    match /items/{id} {
+      function okItem(d) {
+        return d.keys().hasOnly(['uid', 'role', 'cid', 'barcode', 'name', 'kind', 'type', 'pack', 'exp', 'price', 'prev', 't', 'h'])
+          && d.keys().hasAll(['uid', 'role', 'cid', 'barcode', 'name', 'kind', 'type', 'pack', 'exp', 'price', 'prev', 't', 'h'])
+          && d.uid == request.auth.uid
+          && d.role == get(/databases/$(database)/documents/shops/$(request.auth.uid)).data.role
+          && txt(d.cid, 40) && id == request.auth.uid + '_' + d.cid
+          && ((d.barcode == '' && d.cid.matches('n[a-z0-9]{6,12}'))
+              || (d.barcode == d.cid && d.cid.matches('[A-Za-z0-9_-]{6,40}')))
+          && txt(d.name, 120) && opt(d.kind, 100) && txt(d.type, 40)
+          && opt(d.pack, 60) && opt(d.exp, 10)
+          && d.price is number && d.price > 0 && d.price < 1000000000
+          && (d.prev == null || d.prev is number)
+          && d.t is number
+          && d.h is list && d.h.size() >= 1 && d.h.size() <= 1000
+          && d.h[d.h.size() - 1].p == d.price;
+      }
+      allow read: if resource.data.role == 'retail' || approved() || isAdmin();
+      allow create: if approved() && okItem(request.resource.data) && request.resource.data.h.size() == 1;
+      allow update: if approved() && resource.data.uid == request.auth.uid
+                    && okItem(request.resource.data)
+                    && request.resource.data.cid == resource.data.cid
+                    && request.resource.data.barcode == resource.data.barcode
+                    && request.resource.data.h.size() >= resource.data.h.size()
+                    && request.resource.data.h[0:resource.data.h.size()] == resource.data.h;
+      allow delete: if (approved() && resource.data.uid == request.auth.uid) || isAdmin();
+    }
+
+    match /complaints/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['id', 't', 'sh', 'd', 's', 'at'])
+                    && request.resource.data.id == id
+                    && request.resource.data.s == 'new'
+                    && txt(request.resource.data.t, 60)
+                    && txt(request.resource.data.sh, 150)
+                    && txt(request.resource.data.d, 2000);
+      allow read: if isAdmin();
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['s'])
+                    && request.resource.data.s in ['new', 'done', 'rej'];
+      allow delete: if false;
+    }
+
+    match /tracking/{id} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.resource.data.keys().hasOnly(['s']) && request.resource.data.s == 'new';
+      allow update: if isAdmin()
+                    && request.resource.data.keys().hasOnly(['s'])
+                    && request.resource.data.s in ['new', 'done', 'rej'];
+      allow delete: if false;
+    }
+
+    // تقييم التطبيق: تقييم واحد لكل حساب أو جهاز (الإنشاء فقط، لا تعديل).
+    match /feedback/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['r', 'c', 'role', 'at'])
+                    && request.resource.data.r is int && request.resource.data.r >= 1 && request.resource.data.r <= 5
+                    && request.resource.data.c is string && request.resource.data.c.size() <= 200
+                    && request.resource.data.role in ['citizen', 'retail', 'wholesale', 'admin']
+                    && ((signed() && id == request.auth.uid) || (!signed() && id.matches('d_[A-Za-z0-9]{8,40}')));
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}
